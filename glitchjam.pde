@@ -1,9 +1,20 @@
-/* @pjs preload="tilemapsmall.png"; */
+/* @pjs globalKeyEvents=true; 
+pauseOnBlur=true; 
+preload="tilemapsmall.png"; 
+ */
 
 PImage tilemap;
 PImage[] tiles;
 
-int[] screenBG;
+ArrayList<Undoable> undoables;
+
+int currentScreen = 0;
+int currentLayer = 0;
+int layerCount = 2;
+String[] layerNames = { "BG","FG" };
+
+int[][] screenBG; // layer 0
+int[][] screenFG; // layer 1
 
 int tilemapWidth;
 int tilemapHeight;
@@ -53,8 +64,7 @@ void setupEditor() {
   gridFrame.w = gridW;
   gridFrame.h = gridH;
   
-  levelBG = new ArrayList<Sprite>();
-  
+  undoables = new ArrayList<Undoable>();
 }
 
 void resetPlayerToStart() {
@@ -64,10 +74,22 @@ void resetPlayerToStart() {
   playerY = 0;
 }
 
+void resetScreens() {
+  screenBG = new int[40][screenWidth*screenHeight];
+  screenFG = new int[40][screenWidth*screenHeight];
+
+  for (int j = 0; j < 40; j++) {
+    screenBG[j] = new int[screenWidth*screenHeight];
+    for (int i = 0; i < screenWidth*screenHeight; i++) screenBG[j][i] = 510;
+    screenFG[j] = new int[screenWidth*screenHeight];
+    for (int i = 0; i < screenWidth*screenHeight; i++) screenFG[j][i] = 510;
+
+  }
+}
+
 void setupGame() {
   resetPlayerToStart();
-  screenBG = new int[screenWidth*screenHeight];
-  for (int i = 0; i < screenWidth*screenHeight; i++) screenBG[i] = 0;
+  resetScreens();
 }
 
 void setup() {
@@ -124,8 +146,8 @@ void drawFrame(int x, int y, Frame frame) {
 
 void renderEditorGUI() {
   fill(255,255);
-  if (editormode == EDITORMODE_EDIT && showTilemap == 1) text("editor - tile picker",0,8);
-  if (editormode == EDITORMODE_EDIT && showTilemap == -1) text("editor - world",0,8);
+  if (editormode == EDITORMODE_EDIT && showTilemap == 1) text("editor - tile picker (tilenum: " + (((screenY-1)*tilemapWidth)+screenX) + ", layer: " + layerNames[currentLayer] + ")",0,8);
+  if (editormode == EDITORMODE_EDIT && showTilemap == -1) text("editor - world (" + "layer: " + layerNames[currentLayer] + ")",0,8);
   if (editormode == EDITORMODE_TEST) text("play test",0,8);
   if (editormode == EDITORMODE_PLAY) text("play - insert GUI here",0,8);
 
@@ -134,12 +156,23 @@ void renderEditorGUI() {
   }
 }
 
-void drawLevel() {
+boolean bgCached = false;
+boolean fgCached = false;
+
+void drawBG() {
   for (int y = 0; y < screenHeight; y++) {
     for (int x = 0; x < screenWidth; x++) {
-      drawTileNum(x,y+1,screenBG[(y*screenWidth)+x]);
+      drawTileNum(x,y+1,screenBG[currentScreen][(y*screenWidth)+x]);
     }
   }
+}
+
+void drawFG() {
+  for (int y = 0; y < screenHeight; y++) {
+    for (int x = 0; x < screenWidth; x++) {
+      drawTileNum(x,y+1,screenFG[currentScreen][(y*screenWidth)+x]);
+    }
+  }  
 }
 
 void drawPlayer() {
@@ -148,8 +181,9 @@ void drawPlayer() {
 
 void renderGame() {
   //playerX+=playerXS;
-  drawLevel();
+  drawBG();
   //drawPlayer();  
+  drawFG();
 }
 
 void keyPressed() {
@@ -157,6 +191,13 @@ void keyPressed() {
   if (key == 't') { editormode = EDITORMODE_TEST; playerX = worldX; playerY = 0; }
   if (key == 'p') { editormode = EDITORMODE_PLAY; resetPlayerToStart(); }
   if (key == 'e') { editormode = EDITORMODE_EDIT; showTilemap = -1; }
+
+  if (key == 'z') { currentLayer--; if (currentLayer < 0) currentLayer = 0; }
+  if (key == 'x') { currentLayer++; if (currentLayer >= layerCount-1) currentLayer = layerCount-1; }
+
+  if (key == 'u') { undo(); }
+  if (key == 's') { saveScreen(); }
+
 /*
   if (key == 'w') { if (scrollY > 0) scrollY--; }
   if (key == 's') { if (scrollY < mapHeight-1) scrollY++; }
@@ -185,6 +226,77 @@ void keyPressed() {
   }
 }
 
+String[] screenToStrings() {
+  String screenData = "";
+  
+  for (int i = 0; i < (screenWidth*screenHeight); i++) {
+    screenData += screenBG[currentScreen][i] + ",";
+  }
+  for (int i = 0; i < (screenWidth*screenHeight); i++) {
+    if (i < (screenWidth*screenHeight)-1) screenData += screenFG[currentScreen][i] + ",";
+    else screenData += screenFG[currentScreen][i];
+  }
+  
+  return screenData.split(',');
+}
+
+void saveScreen() {
+  saveStrings("scrdata"+currentScreen+".dat", screenToStrings());
+}
+
+void undo() {
+  if (undoables.size() <= 0) return; 
+
+  Undoable u = undoables.get(undoables.size()-1);
+  int tileCounter = 0;
+
+  for (int y = 0; y < u.frame.h; y++) {
+    for (int x = 0; x < u.frame.w; x++) {
+      if ((u.sx+x) < screenWidth) {
+        int tilenum = u.savedBlock[tileCounter];
+        tileCounter++;
+        
+        if (u.layer == 0) 
+          screenBG[currentScreen][((u.sy+y-1)*screenWidth)+(u.sx+x)] = tilenum;
+        else if (u.layer == 1) 
+          screenFG[currentScreen][((u.sy+y-1)*screenWidth)+(u.sx+x)] = tilenum;
+      }
+    }
+  }
+  
+  undoables.remove(undoables.size()-1);
+  
+}
+
+void addCurrentBlock() {
+
+  int[] savedBlock = new int[gridFrame.h*gridFrame.w];
+  int tileCounter = 0;
+
+  for (int y = 0; y < gridFrame.h; y++) {
+    for (int x = 0; x < gridFrame.w; x++) {
+      if ((screenX+x) < screenWidth) {
+        int tilenum = ((y+gridFrame.y)*tilemapWidth)+(x+gridFrame.x);
+
+        if (currentLayer == 0) {
+          savedBlock[tileCounter] = screenBG[currentScreen][((screenY+y-1)*screenWidth)+(screenX+x)];
+          screenBG[currentScreen][((screenY+y-1)*screenWidth)+(screenX+x)] = tilenum;
+        }
+        else if (currentLayer == 1) {
+          savedBlock[tileCounter] = screenFG[currentScreen][((screenY+y-1)*screenWidth)+(screenX+x)];
+          screenFG[currentScreen][((screenY+y-1)*screenWidth)+(screenX+x)] = tilenum;
+        }
+
+        tileCounter++;
+
+      }
+    }
+  }
+  
+  Undoable u = new Undoable(gridFrame, currentLayer,screenX,screenY,savedBlock,tileCounter);
+  undoables.add(u);
+}
+
 void inputHandler() {
   if (editormode == EDITORMODE_EDIT && showTilemap == 1) {
     if (mousePressed == true) {
@@ -208,23 +320,20 @@ void inputHandler() {
   gridFrame.w = gridW;
   gridFrame.h = gridH;
  
+  pScreenX = screenX;
+  pScreenY = screenY;
+  screenX = (int)(mouseX/8);
+  screenY = (int)(mouseY/8);
+  if (screenY <= 0) screenY = 1;
+  if (screenY >= screenHeight) screenY = screenHeight;
+
   if (editormode == EDITORMODE_EDIT && showTilemap != 1) {
-    pScreenX = screenX;
-    pScreenY = screenY;
-    screenX = (int)(mouseX/8);
-    screenY = (int)(mouseY/8);
-    if (screenY <= 0) screenY = 1;
-    if (screenY >= screenHeight) screenY = screenHeight;
 
     if (pScreenX != screenX) addedBlock=false;
     if (pScreenY != screenY) addedBlock=false;
 
     if (mousePressed == true && addedBlock == false) {
-      for (int y = 0; y < gridFrame.h; y++) {
-        for (int x = 0; x < gridFrame.w; x++) {
-          screenBG[((screenY+y-1)*screenWidth)+(screenX+x)] = ((y+gridFrame.y)*tilemapWidth)+(x+gridFrame.x);
-        }
-      }
+      addCurrentBlock();
       addedBlock = true;
     }
     
