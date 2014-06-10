@@ -1,4 +1,4 @@
-§/* @pjs preload="tilemapsmall.png"; */
+/* @pjs preload="tilemapsmall.png"; */
 
 PImage tilemap;
 PImage[][] tiles;
@@ -7,8 +7,8 @@ ArrayList<Sprite> levelBG;
 int mapWidth = 500;
 int mapHeight = 60;
 
-int gridX = 10;
-int gridY = 10;
+int gridX = 0;
+int gridY = 0;
 
 int gridW = 4;
 int gridH = 4;
@@ -40,8 +40,8 @@ boolean addedSprite = false;
 
 void setupEditor() {
   showTilemap = 1;
-  gridX = 10;
-  gridY = 10;
+  gridX = 0;
+  gridY = 9;
 
   gridW = 2;
   gridH = 3;
