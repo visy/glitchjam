@@ -1,11 +1,15 @@
 /* @pjs preload="tilemapsmall.png"; */
 
 PImage tilemap;
-PImage[][] tiles;
-ArrayList<Sprite> levelBG;
+PImage[] tiles;
 
-int mapWidth = 500;
-int mapHeight = 60;
+int[] screenBG;
+
+int tilemapWidth;
+int tilemapHeight;
+
+int screenWidth = 40;
+int screenHeight = 28;
 
 int gridX = 0;
 int gridY = 0;
@@ -17,9 +21,6 @@ int pScreenX = 0;
 int pScreenY = 0;
 int screenX = 0;
 int screenY = 0;
-
-int scrollX = 0;
-int scrollY = 0;
 
 Frame gridFrame;
 
@@ -36,7 +37,7 @@ float playerXS = 0.0;
 int showTilemap = 1;
 int editormode = EDITORMODE_EDIT;
 
-boolean addedSprite = false;
+boolean addedBlock = false;
 
 void setupEditor() {
   showTilemap = 1;
@@ -45,9 +46,6 @@ void setupEditor() {
 
   gridW = 2;
   gridH = 3;
-
-  scrollX = 0;
-  scrollY = 0;
 
   gridFrame = new Frame();
   gridFrame.x = gridX;
@@ -68,17 +66,22 @@ void resetPlayerToStart() {
 
 void setupGame() {
   resetPlayerToStart();
+  screenBG = new int[screenWidth*screenHeight];
+  for (int i = 0; i < screenWidth*screenHeight; i++) screenBG[i] = 0;
 }
 
 void setup() {
   size(320,240);
   tilemap = loadImage("tilemapsmall.png");
   
-  tiles = new PImage[(int)(tilemap.width/8)][(int)(tilemap.height/8)];
+  tilemapWidth = (int)(tilemap.width/8);
+  tilemapHeight = (int)(tilemap.height/8);
   
-  for (int y = 0; y < (int)(tilemap.height/8); y++) {
-    for (int x = 0; x < (int)(tilemap.width/8); x++) {
-      tiles[x][y] = tilemap.get(x*8,y*8, 8,8);
+  tiles = new PImage[tilemapWidth*tilemapHeight];
+  
+  for (int y = 0; y < tilemapHeight; y++) {
+    for (int x = 0; x < tilemapWidth; x++) {
+      tiles[(y*tilemapWidth)+x] = tilemap.get(x*8,y*8, 8,8);
     }
   }
   
@@ -89,7 +92,10 @@ void setup() {
 }
 
 void drawTileset() {
-  image(tilemap,1,9);
+  fill(0);
+  noStroke();
+  rect(0,8,tilemapWidth*8,tilemapHeight*8);
+  image(tilemap,0,8);
 }
 
 void drawGrid(int x,int y,int w,int h) {
@@ -100,14 +106,18 @@ void drawGrid(int x,int y,int w,int h) {
   popMatrix();
 }
 
-void drawTile(int x, int y, int tx, int ty) {
-  image(tiles[tx][ty], x*8,y*8);
+void drawTileNum(int x, int y, int tnum) {
+  image(tiles[tnum], x*8,y*8);
+}
+
+void drawTileXY(int x, int y, int tx, int ty) {
+  image(tiles[(ty*tilemapWidth)+tx], x*8,y*8);
 }
 
 void drawFrame(int x, int y, Frame frame) {
   for (int fy = 0; fy<frame.h; fy++) {
     for (int fx = 0; fx<frame.w; fx++) {
-      drawTile(x+fx,y+fy, frame.x+fx, frame.y+fy);
+      drawTileXY(x+fx,y+fy, frame.x+fx, frame.y+fy);
     }
   }
 }
@@ -125,9 +135,10 @@ void renderEditorGUI() {
 }
 
 void drawLevel() {
-  for (Sprite s : levelBG) {
-    Frame f = s.getFrame(0);
-    drawFrame(s.wx-scrollX, s.wy-scrollY, f);    
+  for (int y = 0; y < screenHeight; y++) {
+    for (int x = 0; x < screenWidth; x++) {
+      drawTileNum(x,y+1,screenBG[(y*screenWidth)+x]);
+    }
   }
 }
 
@@ -146,12 +157,13 @@ void keyPressed() {
   if (key == 't') { editormode = EDITORMODE_TEST; playerX = worldX; playerY = 0; }
   if (key == 'p') { editormode = EDITORMODE_PLAY; resetPlayerToStart(); }
   if (key == 'e') { editormode = EDITORMODE_EDIT; showTilemap = -1; }
-
+/*
   if (key == 'w') { if (scrollY > 0) scrollY--; }
   if (key == 's') { if (scrollY < mapHeight-1) scrollY++; }
   if (key == 'a') { if (scrollX > 0) scrollX--; }
   if (key == 'd') { if (scrollX < mapWidth-1) scrollX++;}
-  
+*/
+
   if (key == CODED) {
     if (keyCode == UP) {
       gridY-=gridH;
@@ -190,38 +202,42 @@ void inputHandler() {
     else if (key == '6') { gridW = 6; gridH = 6; }
 
   }
+  
+  gridFrame.x = gridX;
+  gridFrame.y = gridY-1;
+  gridFrame.w = gridW;
+  gridFrame.h = gridH;
+ 
   if (editormode == EDITORMODE_EDIT && showTilemap != 1) {
     pScreenX = screenX;
     pScreenY = screenY;
     screenX = (int)(mouseX/8);
     screenY = (int)(mouseY/8);
     if (screenY <= 0) screenY = 1;
+    if (screenY >= screenHeight) screenY = screenHeight;
 
-    if (pScreenX != screenX) addedSprite=false;
-    if (pScreenY != screenY) addedSprite=false;
+    if (pScreenX != screenX) addedBlock=false;
+    if (pScreenY != screenY) addedBlock=false;
 
-    if (mousePressed == true && addedSprite == false) {
-      Sprite ns = new Sprite(gridFrame.x, gridFrame.y, gridFrame.w, gridFrame.h, screenX+scrollX, screenY+scrollY, 1);
-      levelBG.add(ns);
-      addedSprite = true;
+    if (mousePressed == true && addedBlock == false) {
+      for (int y = 0; y < gridFrame.h; y++) {
+        for (int x = 0; x < gridFrame.w; x++) {
+          screenBG[((screenY+y-1)*screenWidth)+(screenX+x)] = ((y+gridFrame.y)*tilemapWidth)+(x+gridFrame.x);
+        }
+      }
+      addedBlock = true;
     }
     
     if (mousePressed == false) {
-      addedSprite = false;
+      addedBlock = false;
     }
-}
+  }
   
-  gridFrame.x = gridX;
-  gridFrame.y = gridY-1;
-  gridFrame.w = gridW;
-  gridFrame.h = gridH;
-
 }
 
 void renderEditor() {
   if (editormode == EDITORMODE_EDIT) {
     if (showTilemap == 1) {
-
       drawTileset();
       drawGrid(gridX, gridY, gridW, gridH);
     }
