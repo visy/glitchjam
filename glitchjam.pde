@@ -3,6 +3,10 @@ pauseOnBlur=true;
 preload="tilemapsmall.png"; 
  */
 
+float dt;
+float st;
+float et;
+
 PImage tilemap;
 PImage[] tiles;
 
@@ -45,9 +49,15 @@ int EDITORMODE_PLAY = 3;
 
 int worldX;
 int worldY;
-int playerX;
-int playerY;
-float playerXS = 0.0;
+
+float playerHSpeed = 1.0;
+float playerVSpeed = 0;
+float playerJumpTimer = 0;
+int playerOY;
+
+boolean holdingLeft = false;
+boolean holdingRight = false;
+boolean holdingJump = false;
 
 int showTilemap = 1;
 int editormode = EDITORMODE_EDIT;
@@ -94,9 +104,17 @@ void resetScreens() {
   currentScreen = 0;
 }
 
+Sprite playerSprite;
+
+void resetPlayer() {
+  playerSprite = null;
+  playerSprite = new Sprite(16, 22, 2, 3, 15, 25, 1);
+}
+
 void setupGame() {
   resetPlayerToStart();
   resetScreens();
+  resetPlayer();
 }
 
 void setup() {
@@ -114,6 +132,7 @@ void setup() {
     }
   }
   
+  frameRate(30);
   imageMode(CORNERS);
   
   setupEditor();
@@ -153,7 +172,7 @@ void drawFrame(int x, int y, Frame frame) {
 
 void renderEditorGUI() {
   fill(255,255);
-  if (editormode == EDITORMODE_EDIT && showTilemap == 1) text("["+currentScreen + "/" + screenCount + "] " + "editor - tile picker (tilenum: " + (((screenY-1)*tilemapWidth)+screenX) + ", layer: " + layerNames[currentLayer] + ")",0,8);
+  if (editormode == EDITORMODE_EDIT && showTilemap == 1) text("["+currentScreen + "/" + screenCount + "] " + "editor - tile picker (tilenum: " + (((screenY-1)*tilemapWidth)+screenX) + ", x/y: " + screenX + "/" + (screenY-1) + ", layer: " + layerNames[currentLayer] + ")",0,8);
 
   if (editormode == EDITORMODE_EDIT && showTilemap == -1) text("["+currentScreen + "/" + screenCount + "] " + "editor - world (" + "layer: " + layerNames[currentLayer] + ")",0,8);
   if (editormode == EDITORMODE_TEST) text("play test",0,8);
@@ -183,14 +202,44 @@ void drawFG() {
   }  
 }
 
-void drawPlayer() {
+void playerCheckBounds() {
+  if (playerSprite.wx < -1) playerSprite.wx = -1;
+  if (playerSprite.wx > screenWidth-1) playerSprite.wx = screenWidth-1;
+}
 
+void playerLeft() {
+  playerSprite.wx-=playerHSpeed;
+  playerCheckBounds();
+}
+
+void playerRight() {
+  playerSprite.wx+=playerHSpeed;
+  playerCheckBounds();
+}
+
+boolean playerJumping = false;
+
+void playerJump() {
+  if (playerJumping) return;
+       
+  playerOY = playerSprite.wy;
+  playerSprite.wy-=1;
+  playerVSpeed = 0;
+  playerJumpTimer = 0;
+  jumpStarting = true;
+  playerJumping = true;
+
+}
+
+void drawPlayer() {
+  Frame pf = playerSprite.getFrame(0);
+  drawFrame(playerSprite.wx, playerSprite.wy, pf);
 }
 
 void renderGame() {
   //playerX+=playerXS;
   drawBG();
-  //drawPlayer();  
+  drawPlayer();  
   drawFG();
 }
 
@@ -217,24 +266,38 @@ void keyPressed() {
   if (key == 'd') { if (scrollX < mapWidth-1) scrollX++;}
 */
 
-  if (key == CODED) {
-    if (keyCode == UP) {
-      gridY-=gridH;
-      if (gridY < 1) gridY = 1;
+  if (editormode == EDITORMODE_EDIT) {
+    if (key == CODED) {
+      if (keyCode == UP) {
+        gridY-=gridH;
+        if (gridY < 1) gridY = 1;
+      }
+      else if (keyCode == DOWN) {
+        gridY+=gridH;
+        if (gridY+gridH > (int)(tilemap.height/8)-6) gridY = (int)(tilemap.height/8)-7;
+      }
+      else if (keyCode == LEFT) {
+        gridX-=gridW;
+        if (gridX < 0) gridX = 0;
+      }
+      else if (keyCode == RIGHT) {
+        gridX+=gridW;
+        if (gridX+gridW > (int)(tilemap.width/8)) gridX = (int)(tilemap.width/8);
+      }
     }
-    if (keyCode == DOWN) {
-      gridY+=gridH;
-      if (gridY+gridH > (int)(tilemap.height/8)-6) gridY = (int)(tilemap.height/8)-7;
-    }
-    if (keyCode == LEFT) {
-      gridX-=gridW;
-      if (gridX < 0) gridX = 0;
-    }
-    if (keyCode == RIGHT) {
-      gridX+=gridW;
-      if (gridX+gridW > (int)(tilemap.width/8)) gridX = (int)(tilemap.width/8);
-    }
+  }
+  
+}
 
+void keyReleased() {
+ 
+  if (key == CODED && keyCode != UP) {
+    holdingLeft = false;
+    holdingRight = false;
+    return;
+  }
+  else if (key == CODED) {
+    holdingJump = false;
   }
 }
 
@@ -382,6 +445,26 @@ void inputHandler() {
     }
   }
   
+  // game
+  
+  if (editormode == EDITORMODE_TEST || editormode == EDITORMODE_PLAY) {
+    if (key == CODED && keyPressed == true) {
+      if (keyCode == UP) {
+        holdingJump = true;
+        keyCode = null;
+      }
+      if (keyCode == DOWN) {
+        //playerAction();
+      }
+      if (keyCode == LEFT) {
+        holdingLeft = true;
+      }
+      else if (keyCode == RIGHT) {
+        holdingRight = true;
+      }
+    }
+  }
+
 }
 
 void renderEditor() {
@@ -399,11 +482,41 @@ void renderEditor() {
   renderEditorGUI();
 }
 
+boolean jumpStarting = false;
+
+void physics() {
+  playerHSpeed = dt*0.04;
+  
+  if (!(holdingLeft && holdingRight)) {
+    if (holdingLeft) playerLeft();
+    else if (holdingRight) playerRight();
+  }
+  
+  if (holdingJump) playerJump();
+
+  if (playerJumping) {
+    playerJumpTimer+=dt;
+    
+    if (jumpStarting) {
+      playerVSpeed=cos(playerJumpTimer*0.01)*0.6;
+    }
+    
+    playerSprite.wy-=playerVSpeed;
+    if (playerSprite.wy >= playerOY-0.6) { holdingJump = false; playerSprite.wy = playerOY; playerVSpeed = 0; playerJumping = false; }
+  }
+}
+
 void draw() {
+  st = millis();
+
   background(0);
   
   inputHandler();
+  physics();
   
   renderGame();
   renderEditor();
+  
+  et = millis();
+  dt = et-st;
 }
