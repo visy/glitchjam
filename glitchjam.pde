@@ -84,8 +84,6 @@ void setupEditor() {
 void resetPlayerToStart() {
   worldX = 0; 
   worldY = 0; 
-  playerX = 10; 
-  playerY = 0;
 }
 
 void resetScreens() {
@@ -108,7 +106,7 @@ Sprite playerSprite;
 
 void resetPlayer() {
   playerSprite = null;
-  playerSprite = new Sprite(16, 22, 2, 3, 15, 25, 1);
+  playerSprite = new Sprite(16, 22, 2, 3, 35, 5, 1);
 }
 
 void setupGame() {
@@ -247,7 +245,7 @@ void keyPressed() {
   if (key == ' ') showTilemap = -showTilemap;
   if (key == 't') { editormode = EDITORMODE_TEST; playerX = worldX; playerY = 0; }
   if (key == 'p') { editormode = EDITORMODE_PLAY; resetPlayerToStart(); }
-  if (key == 'e') { editormode = EDITORMODE_EDIT; showTilemap = -1; }
+  if (key == 'e') { editormode = EDITORMODE_EDIT; resetPlayer(); showTilemap = -1; }
 
   if (key == 'z') { currentLayer--; if (currentLayer < 0) currentLayer = 0; }
   if (key == 'x') { currentLayer++; if (currentLayer >= layerCount-1) currentLayer = layerCount-1; }
@@ -291,13 +289,10 @@ void keyPressed() {
 
 void keyReleased() {
  
-  if (key == CODED && keyCode != UP) {
-    holdingLeft = false;
-    holdingRight = false;
-    return;
-  }
-  else if (key == CODED) {
-    holdingJump = false;
+  if (key == CODED) {
+    if (keyCode == UP) holdingJump = false;
+    if (keyCode == LEFT) holdingLeft = false;
+    if (keyCode == RIGHT) holdingRight = false;
   }
 }
 
@@ -458,9 +453,11 @@ void inputHandler() {
       }
       if (keyCode == LEFT) {
         holdingLeft = true;
+        holdingRight = false;
       }
       else if (keyCode == RIGHT) {
         holdingRight = true;
+        holdingLeft = false;
       }
     }
   }
@@ -485,24 +482,35 @@ void renderEditor() {
 boolean jumpStarting = false;
 
 void physics() {
+  if (editormode == EDITORMODE_EDIT) return;
   playerHSpeed = dt*0.04;
   
-  if (!(holdingLeft && holdingRight)) {
     if (holdingLeft) playerLeft();
     else if (holdingRight) playerRight();
-  }
+  
+  if (holdingLeft) text("left",64,64);
+  if (holdingRight) text("right",64,92);
   
   if (holdingJump) playerJump();
 
-  if (playerJumping) {
-    playerJumpTimer+=dt;
-    
+
+  if (playerJumping) {    
     if (jumpStarting) {
-      playerVSpeed=cos(playerJumpTimer*0.01)*0.6;
+      playerVSpeed=cos((playerJumpTimer)*0.02)*0.3;
     }
+
+    if (playerJumpTimer < 170) playerJumpTimer+=dt;
+    else playerVSpeed+=playerVSpeed*0.1*dt;
     
     playerSprite.wy-=playerVSpeed;
-    if (playerSprite.wy >= playerOY-0.6) { holdingJump = false; playerSprite.wy = playerOY; playerVSpeed = 0; playerJumping = false; }
+    if (playerSprite.wy >= screenHeight-1) { holdingJump = false; playerSprite.wy = (int)screenHeight-1; playerVSpeed = 0; playerJumping = false; }
+  } else {
+    playerVSpeed-=0.004*dt;
+    if (playerVSpeed > 3) playerVSpeed = 3;
+    
+    playerSprite.wy-=playerVSpeed;
+    if (playerSprite.wy >= screenHeight-1) { playerSprite.wy = screenHeight-1; playerVSpeed = 0; }
+
   }
 }
 
