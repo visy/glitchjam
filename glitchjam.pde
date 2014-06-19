@@ -59,8 +59,8 @@ boolean holdingLeft = false;
 boolean holdingRight = false;
 boolean holdingJump = false;
 
-int showTilemap = 1;
-int editormode = EDITORMODE_EDIT;
+int showTilemap = 0;
+int editormode = EDITORMODE_TEST;
 
 boolean addedBlock = false;
 
@@ -106,7 +106,9 @@ Sprite playerSprite;
 
 void resetPlayer() {
   playerSprite = null;
-  playerSprite = new Sprite(16, 22, 2, 3, 35, 5, 1);
+  playerSprite = new Sprite(16, 22, 2, 3, 35, 5, 8);
+  playerSprite.setAnimationLeft(0,1);
+  playerSprite.setAnimationRight(4,5);
 }
 
 void setupGame() {
@@ -207,11 +209,13 @@ void playerCheckBounds() {
 
 void playerLeft() {
   playerSprite.wx-=playerHSpeed;
+  playerSprite.setDir(0);
   playerCheckBounds();
 }
 
 void playerRight() {
   playerSprite.wx+=playerHSpeed;
+  playerSprite.setDir(1);
   playerCheckBounds();
 }
 
@@ -229,8 +233,13 @@ void playerJump() {
 
 }
 
+int playerWalkSpeed = 15;
+
 void drawPlayer() {
-  Frame pf = playerSprite.getFrame(0);
+  if (holdingLeft || holdingRight) playerSprite.animate(playerWalkSpeed,dt);
+  Frame pf;
+  if (!playerJumping) pf = playerSprite.getAnimFrame();
+  else { pf = playerSprite.getFrame(2+playerSprite.dir*4); }
   drawFrame(playerSprite.wx, playerSprite.wy, pf);
 }
 
